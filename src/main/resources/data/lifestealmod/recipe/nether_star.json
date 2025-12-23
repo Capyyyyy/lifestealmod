@@ -1,9 +1,10 @@
 {
   "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "pattern": ["#n#", "nNn", "#n#"],
+  "pattern": ["#nw", "nNn", "wn#"],
   "key": {
-    "#": "minecraft:raw_gold_block",
+    "#": "minecraft:nautilus_shell",
+    "w": "minecraft:wither_skeleton_skull",
     "n": "minecraft:netherite_ingot",
     "N": "minecraft:nether_star"
   },
@@ -11,7 +12,7 @@
     "id": "minecraft:nether_star",
     "count": 1,
     "components": {
-      "minecraft:item_name": "{\"text\":\"Heart\"}",
+      "minecraft:item_name": "Heart",
       "minecraft:enchantment_glint_override": false
     }
   }

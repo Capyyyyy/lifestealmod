@@ -1,17 +1,18 @@
 {
   "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "pattern": ["nHn", "HBH", "nHn"],
+  "pattern": ["HBH", "HeH", "ooo"],
   "key": {
     "B": "minecraft:beacon",
     "H": "minecraft:nether_star",
-    "n": "minecraft:netherite_ingot"
+    "o": "minecraft:obsidian",
+    "e": "minecraft:elytra"
   },
   "result": {
     "id": "minecraft:beacon",
     "count": 1,
     "components": {
-      "minecraft:item_name": "{\"text\":\"Revive Beacon\"}",
+      "minecraft:item_name": "Revive Beacon",
       "minecraft:enchantment_glint_override": true
     }
   }
