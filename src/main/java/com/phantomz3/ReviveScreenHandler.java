@@ -1,5 +1,6 @@
 package com.phantomz3;
 
+import com.mojang.authlib.GameProfile;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerEntity;
@@ -13,6 +14,8 @@ import net.minecraft.screen.GenericContainerScreenHandler;
 import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.server.BannedPlayerEntry;
+import net.minecraft.server.BannedPlayerList;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -41,12 +44,22 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
         // Check if the clicked item is a player head with a glint
         if (clickedStack.getItem() == Items.PLAYER_HEAD) {
             String playerName = clickedStack.get(DataComponentTypes.ITEM_NAME).getString();
-            ServerPlayerEntity target = ((ServerPlayerEntity) player).getServer().getPlayerManager()
-                    .getPlayer(playerName);
+            ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
+            BannedPlayerList banList = serverPlayer.getServer().getPlayerManager().getUserBanList();
+            
+            // Find the banned player entry
+            BannedPlayerEntry targetEntry = null;
+            for (BannedPlayerEntry entry : banList.values()) {
+                GameProfile profile = LifestealMod.getProfileFromEntry(entry);
+                if (profile != null && profile.getName().equalsIgnoreCase(playerName)) {
+                    targetEntry = entry;
+                    break;
+                }
+            }
 
-            if (target != null) {
-                // Revive the player
-                executeRevive_((ServerPlayerEntity) player, target, false);
+            if (targetEntry != null) {
+                // Revive the player (Unban)
+                executeRevive_(serverPlayer, targetEntry);
 
                 // Remove the player head from the GUI after revival
                 this.slots.get(slotId).setStack(ItemStack.EMPTY);
@@ -54,6 +67,8 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
 
                 // Closing the GUI after revival
                 ((ServerPlayerEntity) player).closeHandledScreen();
+            } else {
+                 player.sendMessage(Text.literal("Could not find banned player: " + playerName).formatted(Formatting.RED), true);
             }
         }
 
@@ -66,21 +81,10 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
         super.onSlotClick(slotId, button, actionType, player);
     }
 
-    private int executeRevive_(ServerPlayerEntity player, ServerPlayerEntity target, boolean isOpRevive) {
-        // If the player is reviving themselves or a player who is not dead, return 0
-        if (player == target || target.getHealth() > 2.0f) {
-            player.sendMessage(Text.literal("Reviving the player failed!").formatted(Formatting.RED), true);
-            return 0;
-        }
+    private int executeRevive_(ServerPlayerEntity player, BannedPlayerEntry targetEntry) {
+        BannedPlayerList banList = player.getServer().getPlayerManager().getUserBanList();
+        banList.remove(targetEntry); // Unban the player
 
-        double currentMaxHealth = target.getAttributeBaseValue(EntityAttributes.MAX_HEALTH);
-        double newMaxHealth = Math.max(2.0, currentMaxHealth + 8.0); // 20 hearts = 40 health
-
-        target.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
-        target.setHealth((float) newMaxHealth); // Set player's health to the new max health
-
-        // changing the player's gamemode to survival
-        target.changeGameMode(GameMode.SURVIVAL);
         player.sendMessage(Text.literal("Succesfully revived the player!").formatted(Formatting.GREEN),
                 true);
 

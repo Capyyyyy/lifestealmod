@@ -11,9 +11,15 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.block.RespawnAnchorBlock;
+import net.minecraft.server.BannedPlayerEntry;
+import net.minecraft.server.BannedPlayerList;
+import com.mojang.authlib.GameProfile;
 import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.command.argument.GameProfileArgumentType;
 import net.minecraft.component.DataComponentTypes;
+import java.lang.reflect.Field;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
@@ -53,10 +59,44 @@ public class LifestealMod implements ModInitializer {
         registerCommands();
         // registerReviveCommand();
         registerOpReviveCommand();
+
+        // Check if player was revived on join
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+             ServerPlayerEntity player = handler.getPlayer();
+             double playerMaxHealth = player.getAttributeBaseValue(EntityAttributes.MAX_HEALTH);
+             // If player joins with low max health (meaning they were banned/dead), restore them
+             if (playerMaxHealth <= 1.0) {
+                 double newMaxHealth = playerMaxHealth + 8.0; 
+                 player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
+                 player.setHealth((float) newMaxHealth);
+                 
+                 // Ensure survival mode
+                 player.changeGameMode(GameMode.SURVIVAL);
+                 
+                 player.sendMessage(Text.literal("You have been revived!").formatted(Formatting.GREEN), true);
+             }
+        });
     }
 
     private void registerConfig() {
         AutoConfig.register(ModConfig.class, GsonConfigSerializer::new);
+    }
+
+    public static GameProfile getProfileFromEntry(BannedPlayerEntry entry) {
+        try {
+             // Iterate all fields to find the one holding GameProfile (the key)
+             // This avoids issues with obfuscated field names
+            for (Field field : net.minecraft.server.ServerConfigEntry.class.getDeclaredFields()) {
+                field.setAccessible(true);
+                Object value = field.get(entry);
+                if (value instanceof GameProfile) {
+                    return (GameProfile) value;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     private void registerEvents() {
@@ -64,7 +104,7 @@ public class LifestealMod implements ModInitializer {
         ServerLivingEntityEvents.ALLOW_DEATH.register(
             (entity, source, amount) -> {
                 if (entity instanceof PlayerEntity) {
-                    PlayerEntity player = (PlayerEntity) entity;
+                    ServerPlayerEntity player = (ServerPlayerEntity) entity; // Cast to ServerPlayerEntity
                     LivingEntity attacker = (LivingEntity) source.getAttacker();
                     ModConfig config = AutoConfig.getConfigHolder(
                         ModConfig.class
@@ -132,17 +172,6 @@ public class LifestealMod implements ModInitializer {
                     if (playerMaxHealth <= 1.0) {
                         ServerWorld serverWorld =
                             (ServerWorld) player.getWorld();
-                        ((ServerPlayerEntity) player).changeGameMode(
-                            GameMode.SPECTATOR
-                        );
-                        player.sendMessage(
-                            Text.literal(
-                                "You lost all your hearts! You are now in spectator mode!"
-                            ).formatted(Formatting.GRAY),
-                            true
-                        );
-
-                        player.setHealth(1.0f);
 
                         if (
                             !serverWorld
@@ -151,6 +180,11 @@ public class LifestealMod implements ModInitializer {
                         ) {
                             player.getInventory().dropAll();
                         }
+
+                        BannedPlayerList bannedPlayerList = player.getServer().getPlayerManager().getUserBanList();
+                        BannedPlayerEntry bannedPlayerEntry = new BannedPlayerEntry(player.getGameProfile(), null, "Lifesteal Mod", null, "You lost all your hearts!");
+                        bannedPlayerList.add(bannedPlayerEntry);
+                        player.networkHandler.disconnect(Text.literal("You lost all your hearts!"));
 
                         player
                             .getServer()
@@ -180,7 +214,6 @@ public class LifestealMod implements ModInitializer {
         // Right-click heart to gain health
         UseItemCallback.EVENT.register((player, world, hand) -> {
             ItemStack itemStack = player.getStackInHand(hand);
-
             if (
                 itemStack.getItem() == Items.NETHER_STAR &&
                 !(itemStack.hasGlint()) &&
@@ -240,38 +273,32 @@ public class LifestealMod implements ModInitializer {
                     // Create a simple 9-slot chest inventory
                     SimpleInventory inventory = new SimpleInventory(27);
 
-                    // Fill the inventory with player heads of player who are dead
+                    // Fill the inventory with player heads of players who are banned with the specific reason
                     serverPlayer
                         .getServer()
                         .getPlayerManager()
-                        .getPlayerList()
-                        .forEach(p -> {
-                            if (p.getHealth() <= 1.0f) {
-                                ItemStack playerHead = new ItemStack(
-                                    Items.PLAYER_HEAD
-                                );
-                                // not using nbt because it is not supported in 1.21 using component system
+                        .getUserBanList()
+                        .values()
+                        .forEach(entry -> {
+                            if ("You lost all your hearts!".equals(entry.getReason())) {
+                                ItemStack playerHead = new ItemStack(Items.PLAYER_HEAD);
+                                GameProfile profile = getProfileFromEntry(entry);
+                                String name = profile != null ? profile.getName() : "Unknown";
+                                
                                 playerHead.set(
                                     DataComponentTypes.ITEM_NAME,
-                                    Text.literal(p.getName().getString())
+                                    Text.literal(name)
                                 );
 
                                 NbtCompound nbtCompound = new NbtCompound();
-                                nbtCompound.putString(
-                                    "SkullOwner",
-                                    p.getName().getString()
-                                );
-                                NbtComponent nbtComponent = NbtComponent.of(
-                                    nbtCompound
-                                );
-                                playerHead.set(
-                                    DataComponentTypes.CUSTOM_DATA,
-                                    nbtComponent
-                                );
+                                nbtCompound.putString("SkullOwner", name);
+                                NbtComponent nbtComponent = NbtComponent.of(nbtCompound);
+                                playerHead.set(DataComponentTypes.CUSTOM_DATA, nbtComponent);
                                 inventory.addStack(playerHead);
                             }
                         });
 
+                    // Filling the inventory with gray glass panes to fill the remaining slots
                     // Filling the inventory with gray glass panes to fill the remaining slots
                     for (int i = 0; i < inventory.size(); i++) {
                         if (inventory.getStack(i).isEmpty()) {
@@ -285,7 +312,6 @@ public class LifestealMod implements ModInitializer {
                             inventory.setStack(i, glassPane);
                         }
                     }
-
                     // Open the chest GUI for the player
                     serverPlayer.openHandledScreen(
                         new SimpleNamedScreenHandlerFactory(
@@ -305,6 +331,7 @@ public class LifestealMod implements ModInitializer {
 
             return ActionResult.PASS;
         });
+
 
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             ItemStack itemStack = player.getStackInHand(hand);
@@ -628,12 +655,11 @@ public class LifestealMod implements ModInitializer {
                     CommandManager.literal("revive").then(
                         CommandManager.argument(
                             "player",
-                            EntityArgumentType.player()
+                            GameProfileArgumentType.gameProfile()
                         ).executes(context -> {
                             return executeRevive(
                                 context.getSource(),
-                                EntityArgumentType.getPlayer(context, "player"),
-                                false
+                                GameProfileArgumentType.getProfileArgument(context, "player")
                             );
                         })
                     )
@@ -645,15 +671,11 @@ public class LifestealMod implements ModInitializer {
                         CommandManager.literal("revive").then(
                             CommandManager.argument(
                                 "player",
-                                EntityArgumentType.player()
+                                GameProfileArgumentType.gameProfile()
                             ).executes(context -> {
                                 return executeRevive(
                                     context.getSource(),
-                                    EntityArgumentType.getPlayer(
-                                        context,
-                                        "player"
-                                    ),
-                                    false
+                                    GameProfileArgumentType.getProfileArgument(context, "player")
                                 );
                             })
                         )
@@ -674,15 +696,11 @@ public class LifestealMod implements ModInitializer {
                             .then(
                                 CommandManager.argument(
                                     "player",
-                                    EntityArgumentType.player()
+                                    GameProfileArgumentType.gameProfile()
                                 ).executes(context -> {
                                     return executeRevive(
                                         context.getSource(),
-                                        EntityArgumentType.getPlayer(
-                                            context,
-                                            "player"
-                                        ),
-                                        true
+                                        GameProfileArgumentType.getProfileArgument(context, "player")
                                     );
                                 })
                             )
@@ -692,83 +710,28 @@ public class LifestealMod implements ModInitializer {
         );
     }
 
-    private int executeRevive_(
-        ServerPlayerEntity player,
-        ServerPlayerEntity target,
-        boolean isOpRevive
-    ) {
-        Inventory inventory = player.getInventory();
-
-        // If the player is reviving themselves or a player who is not dead, return 0
-        if (player == target || target.getHealth() > 2.0f) {
-            player.sendMessage(
-                Text.literal("You cannot revive this player!").formatted(
-                    Formatting.RED
-                ),
-                true
-            );
-            return 0;
-        }
-
-        double currentMaxHealth = target.getAttributeBaseValue(
-            EntityAttributes.MAX_HEALTH
-        );
-        double newMaxHealth = Math.max(2.0, currentMaxHealth + 8.0); // 20 hearts = 40 health
-
-        target
-            .getAttributeInstance(EntityAttributes.MAX_HEALTH)
-            .setBaseValue(newMaxHealth);
-        target.setHealth((float) newMaxHealth); // Set player's health to the new max health
-
-        // changing the player's gamemode to survival
-        target.changeGameMode(GameMode.SURVIVAL);
-        player.sendMessage(
-            Text.literal("Player revived successfully!").formatted(
-                Formatting.GREEN
-            ),
-            true
-        );
-        return 1;
-    }
-
     // Extracted method for revive logic
     private int executeRevive(
         ServerCommandSource source,
-        ServerPlayerEntity target,
-        boolean isOpRevive
+        Collection<GameProfile> targets
     ) {
-        ServerPlayerEntity player = source.getPlayer();
-        Inventory inventory = player.getInventory();
+        BannedPlayerList banList = source.getServer().getPlayerManager().getUserBanList();
+        int successfullyRevived = 0;
 
-        // If the player is reviving themselves or a player who is not dead, return 0
-        if (player == target || target.getHealth() > 2.0f) {
-            player.sendMessage(
-                Text.literal("You cannot revive this player!").formatted(
-                    Formatting.RED
-                ),
-                true
-            );
-            return 0;
+        for (GameProfile profile : targets) {
+            BannedPlayerEntry entry = banList.get(profile);
+            if (entry != null) {
+                banList.remove(entry);
+                successfullyRevived++;
+                source.sendMessage(
+                    Text.literal("Revived " + profile.getName()).formatted(Formatting.GREEN)
+                );
+            } else {
+                source.sendMessage(
+                    Text.literal(profile.getName() + " is not banned.").formatted(Formatting.RED)
+                );
+            }
         }
-
-        double currentMaxHealth = target.getAttributeBaseValue(
-            EntityAttributes.MAX_HEALTH
-        );
-        double newMaxHealth = Math.max(2.0, currentMaxHealth + 8.0); // 20 hearts = 40 health
-
-        target
-            .getAttributeInstance(EntityAttributes.MAX_HEALTH)
-            .setBaseValue(newMaxHealth);
-        target.setHealth((float) newMaxHealth); // Set player's health to the new max health
-
-        // changing the player's gamemode to survival
-        target.changeGameMode(GameMode.SURVIVAL);
-        player.sendMessage(
-            Text.literal("Player revived successfully!").formatted(
-                Formatting.GREEN
-            ),
-            true
-        );
-        return 1;
+        return successfullyRevived;
     }
 }
