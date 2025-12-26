@@ -45,8 +45,8 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
         if (clickedStack.getItem() == Items.PLAYER_HEAD) {
             String playerName = clickedStack.get(DataComponentTypes.ITEM_NAME).getString();
             ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
-            BannedPlayerList banList = serverPlayer.getServer().getPlayerManager().getUserBanList();
-            
+            BannedPlayerList banList = serverPlayer.getWorld().getServer().getPlayerManager().getUserBanList();
+
             // Find the banned player entry
             BannedPlayerEntry targetEntry = null;
             for (BannedPlayerEntry entry : banList.values()) {
@@ -82,7 +82,7 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
     }
 
     private int executeRevive_(ServerPlayerEntity player, BannedPlayerEntry targetEntry) {
-        BannedPlayerList banList = player.getServer().getPlayerManager().getUserBanList();
+        BannedPlayerList banList = player.getWorld().getServer().getPlayerManager().getUserBanList();
         banList.remove(targetEntry); // Unban the player
 
         player.sendMessage(Text.literal("Succesfully revived the player!").formatted(Formatting.GREEN),
