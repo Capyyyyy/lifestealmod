@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import java.lang.reflect.Field;
 import java.util.Collection;
+import java.util.stream.Collectors; // if not already imported
 import me.shedaniel.autoconfig.AutoConfig;
 import me.shedaniel.autoconfig.serializer.GsonConfigSerializer;
 import net.fabricmc.api.ModInitializer;
@@ -33,6 +34,7 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
 import net.minecraft.server.BannedPlayerEntry;
 import net.minecraft.server.BannedPlayerList;
+import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -198,7 +200,7 @@ public class LifestealMod implements ModInitializer {
                             .getUserBanList();
                         BannedPlayerEntry bannedPlayerEntry =
                             new BannedPlayerEntry(
-                                player.getGameProfile(),
+                                new PlayerConfigEntry(player.getGameProfile()), // ✅ Wrap in PlayerConfigEntry
                                 null,
                                 "Lifesteal Mod",
                                 null,
@@ -761,7 +763,7 @@ public class LifestealMod implements ModInitializer {
     // Extracted method for revive logic
     private int executeRevive(
         ServerCommandSource source,
-        Collection<GameProfile> targets
+        Collection<PlayerConfigEntry> targets // ← Change from GameProfile to PlayerConfigEntry
     ) {
         BannedPlayerList banList = source
             .getWorld()
@@ -769,20 +771,22 @@ public class LifestealMod implements ModInitializer {
             .getPlayerManager()
             .getUserBanList();
         int successfullyRevived = 0;
-
-        for (GameProfile profile : targets) {
-            BannedPlayerEntry entry = banList.get(profile);
-            if (entry != null) {
-                banList.remove(entry);
+        for (PlayerConfigEntry entry : targets) {
+            // ← Change type here too
+            BannedPlayerEntry bannedEntry = banList.get(entry); // ← No wrapper needed now!
+            if (bannedEntry != null) {
+                banList.remove(bannedEntry);
                 successfullyRevived++;
                 source.sendMessage(
-                    Text.literal("Revived " + profile.name()).formatted(
+                    Text.literal("Revived " + entry.name()).formatted(
+                        // ← entry.name() instead of profile.name()
                         Formatting.GREEN
                     )
                 );
             } else {
                 source.sendMessage(
-                    Text.literal(profile.name() + " is not banned.").formatted(
+                    Text.literal(entry.name() + " is not banned.").formatted(
+                        // ← Same here
                         Formatting.RED
                     )
                 );
