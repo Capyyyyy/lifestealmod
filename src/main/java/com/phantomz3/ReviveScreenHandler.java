@@ -16,6 +16,7 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.server.BannedPlayerEntry;
 import net.minecraft.server.BannedPlayerList;
+import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -71,10 +72,9 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
             // Find the banned player entry
             BannedPlayerEntry targetEntry = null;
             for (BannedPlayerEntry entry : banList.values()) {
-                GameProfile profile = LifestealMod.getProfileFromEntry(entry);
+                PlayerConfigEntry config = entry.getKey();
                 if (
-                    profile != null &&
-                    profile.name().equalsIgnoreCase(playerName)
+                    config != null && config.name().equalsIgnoreCase(playerName)
                 ) {
                     targetEntry = entry;
                     break;

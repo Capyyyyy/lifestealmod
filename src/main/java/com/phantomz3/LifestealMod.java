@@ -233,10 +233,6 @@ public class LifestealMod implements ModInitializer {
             }
         );
 
-        ModConfig config = AutoConfig.getConfigHolder(
-            ModConfig.class
-        ).getConfig();
-
         // Right-click heart to gain health
         UseItemCallback.EVENT.register((player, world, hand) -> {
             ItemStack itemStack = player.getStackInHand(hand);
@@ -312,16 +308,16 @@ public class LifestealMod implements ModInitializer {
                                     entry.getReason()
                                 )
                             ) {
+                                // Get the PlayerConfigEntry key directly
+                                PlayerConfigEntry config = entry.getKey();
+
+                                String name = config != null
+                                    ? config.name()
+                                    : "Unknown";
+
                                 ItemStack playerHead = new ItemStack(
                                     Items.PLAYER_HEAD
                                 );
-                                GameProfile profile = getProfileFromEntry(
-                                    entry
-                                );
-                                String name = profile != null
-                                    ? profile.name()
-                                    : "Unknown";
-
                                 playerHead.set(
                                     DataComponentTypes.ITEM_NAME,
                                     Text.literal(name)
@@ -329,13 +325,11 @@ public class LifestealMod implements ModInitializer {
 
                                 NbtCompound nbtCompound = new NbtCompound();
                                 nbtCompound.putString("SkullOwner", name);
-                                NbtComponent nbtComponent = NbtComponent.of(
-                                    nbtCompound
-                                );
                                 playerHead.set(
                                     DataComponentTypes.CUSTOM_DATA,
-                                    nbtComponent
+                                    NbtComponent.of(nbtCompound)
                                 );
+
                                 inventory.addStack(playerHead);
                             }
                         });
