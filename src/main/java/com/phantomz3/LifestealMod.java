@@ -1,6 +1,8 @@
 package com.phantomz3;
 
+import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import java.lang.reflect.Field;
 import java.util.Collection;
 import me.shedaniel.autoconfig.AutoConfig;
 import me.shedaniel.autoconfig.serializer.GsonConfigSerializer;
@@ -13,13 +15,9 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.block.RespawnAnchorBlock;
-import net.minecraft.server.BannedPlayerEntry;
-import net.minecraft.server.BannedPlayerList;
-import com.mojang.authlib.GameProfile;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.command.argument.GameProfileArgumentType;
 import net.minecraft.component.DataComponentTypes;
-import java.lang.reflect.Field;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
@@ -33,6 +31,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
+import net.minecraft.server.BannedPlayerEntry;
+import net.minecraft.server.BannedPlayerList;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -62,19 +62,28 @@ public class LifestealMod implements ModInitializer {
 
         // Check if player was revived on join
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-             ServerPlayerEntity player = handler.getPlayer();
-             double playerMaxHealth = player.getAttributeBaseValue(EntityAttributes.MAX_HEALTH);
-             // If player joins with low max health (meaning they were banned/dead), restore them
-             if (playerMaxHealth <= 1.0) {
-                 double newMaxHealth = playerMaxHealth + 8.0; 
-                 player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
-                 player.setHealth((float) newMaxHealth);
-                 
-                 // Ensure survival mode
-                 player.changeGameMode(GameMode.SURVIVAL);
-                 
-                 player.sendMessage(Text.literal("You have been revived!").formatted(Formatting.GREEN), true);
-             }
+            ServerPlayerEntity player = handler.getPlayer();
+            double playerMaxHealth = player.getAttributeBaseValue(
+                EntityAttributes.MAX_HEALTH
+            );
+            // If player joins with low max health (meaning they were banned/dead), restore them
+            if (playerMaxHealth <= 1.0) {
+                double newMaxHealth = playerMaxHealth + 8.0;
+                player
+                    .getAttributeInstance(EntityAttributes.MAX_HEALTH)
+                    .setBaseValue(newMaxHealth);
+                player.setHealth((float) newMaxHealth);
+
+                // Ensure survival mode
+                player.changeGameMode(GameMode.SURVIVAL);
+
+                player.sendMessage(
+                    Text.literal("You have been revived!").formatted(
+                        Formatting.GREEN
+                    ),
+                    true
+                );
+            }
         });
     }
 
@@ -84,9 +93,10 @@ public class LifestealMod implements ModInitializer {
 
     public static GameProfile getProfileFromEntry(BannedPlayerEntry entry) {
         try {
-             // Iterate all fields to find the one holding GameProfile (the key)
-             // This avoids issues with obfuscated field names
-            for (Field field : net.minecraft.server.ServerConfigEntry.class.getDeclaredFields()) {
+            // Iterate all fields to find the one holding GameProfile (the key)
+            // This avoids issues with obfuscated field names
+            for (Field field : net.minecraft.server
+                .ServerConfigEntry.class.getDeclaredFields()) {
                 field.setAccessible(true);
                 Object value = field.get(entry);
                 if (value instanceof GameProfile) {
@@ -171,7 +181,7 @@ public class LifestealMod implements ModInitializer {
 
                     if (playerMaxHealth <= 1.0) {
                         ServerWorld serverWorld =
-                            (ServerWorld) player.getWorld();
+                            (ServerWorld) player.getEntityWorld();
 
                         if (
                             !serverWorld
@@ -181,12 +191,26 @@ public class LifestealMod implements ModInitializer {
                             player.getInventory().dropAll();
                         }
 
-                        BannedPlayerList bannedPlayerList = player.getServer().getPlayerManager().getUserBanList();
-                        BannedPlayerEntry bannedPlayerEntry = new BannedPlayerEntry(player.getGameProfile(), null, "Lifesteal Mod", null, "You lost all your hearts!");
+                        BannedPlayerList bannedPlayerList = player
+                            .getEntityWorld()
+                            .getServer()
+                            .getPlayerManager()
+                            .getUserBanList();
+                        BannedPlayerEntry bannedPlayerEntry =
+                            new BannedPlayerEntry(
+                                player.getGameProfile(),
+                                null,
+                                "Lifesteal Mod",
+                                null,
+                                "You lost all your hearts!"
+                            );
                         bannedPlayerList.add(bannedPlayerEntry);
-                        player.networkHandler.disconnect(Text.literal("You lost all your hearts!"));
+                        player.networkHandler.disconnect(
+                            Text.literal("You lost all your hearts!")
+                        );
 
                         player
+                            .getEntityWorld()
                             .getServer()
                             .getPlayerManager()
                             .broadcast(
@@ -275,16 +299,27 @@ public class LifestealMod implements ModInitializer {
 
                     // Fill the inventory with player heads of players who are banned with the specific reason
                     serverPlayer
+                        .getEntityWorld()
                         .getServer()
                         .getPlayerManager()
                         .getUserBanList()
                         .values()
                         .forEach(entry -> {
-                            if ("You lost all your hearts!".equals(entry.getReason())) {
-                                ItemStack playerHead = new ItemStack(Items.PLAYER_HEAD);
-                                GameProfile profile = getProfileFromEntry(entry);
-                                String name = profile != null ? profile.getName() : "Unknown";
-                                
+                            if (
+                                "You lost all your hearts!".equals(
+                                    entry.getReason()
+                                )
+                            ) {
+                                ItemStack playerHead = new ItemStack(
+                                    Items.PLAYER_HEAD
+                                );
+                                GameProfile profile = getProfileFromEntry(
+                                    entry
+                                );
+                                String name = profile != null
+                                    ? profile.name()
+                                    : "Unknown";
+
                                 playerHead.set(
                                     DataComponentTypes.ITEM_NAME,
                                     Text.literal(name)
@@ -292,8 +327,13 @@ public class LifestealMod implements ModInitializer {
 
                                 NbtCompound nbtCompound = new NbtCompound();
                                 nbtCompound.putString("SkullOwner", name);
-                                NbtComponent nbtComponent = NbtComponent.of(nbtCompound);
-                                playerHead.set(DataComponentTypes.CUSTOM_DATA, nbtComponent);
+                                NbtComponent nbtComponent = NbtComponent.of(
+                                    nbtCompound
+                                );
+                                playerHead.set(
+                                    DataComponentTypes.CUSTOM_DATA,
+                                    nbtComponent
+                                );
                                 inventory.addStack(playerHead);
                             }
                         });
@@ -331,7 +371,6 @@ public class LifestealMod implements ModInitializer {
 
             return ActionResult.PASS;
         });
-
 
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             ItemStack itemStack = player.getStackInHand(hand);
@@ -659,7 +698,10 @@ public class LifestealMod implements ModInitializer {
                         ).executes(context -> {
                             return executeRevive(
                                 context.getSource(),
-                                GameProfileArgumentType.getProfileArgument(context, "player")
+                                GameProfileArgumentType.getProfileArgument(
+                                    context,
+                                    "player"
+                                )
                             );
                         })
                     )
@@ -675,7 +717,10 @@ public class LifestealMod implements ModInitializer {
                             ).executes(context -> {
                                 return executeRevive(
                                     context.getSource(),
-                                    GameProfileArgumentType.getProfileArgument(context, "player")
+                                    GameProfileArgumentType.getProfileArgument(
+                                        context,
+                                        "player"
+                                    )
                                 );
                             })
                         )
@@ -700,7 +745,10 @@ public class LifestealMod implements ModInitializer {
                                 ).executes(context -> {
                                     return executeRevive(
                                         context.getSource(),
-                                        GameProfileArgumentType.getProfileArgument(context, "player")
+                                        GameProfileArgumentType.getProfileArgument(
+                                            context,
+                                            "player"
+                                        )
                                     );
                                 })
                             )
@@ -715,7 +763,11 @@ public class LifestealMod implements ModInitializer {
         ServerCommandSource source,
         Collection<GameProfile> targets
     ) {
-        BannedPlayerList banList = source.getServer().getPlayerManager().getUserBanList();
+        BannedPlayerList banList = source
+            .getWorld()
+            .getServer()
+            .getPlayerManager()
+            .getUserBanList();
         int successfullyRevived = 0;
 
         for (GameProfile profile : targets) {
@@ -724,11 +776,15 @@ public class LifestealMod implements ModInitializer {
                 banList.remove(entry);
                 successfullyRevived++;
                 source.sendMessage(
-                    Text.literal("Revived " + profile.getName()).formatted(Formatting.GREEN)
+                    Text.literal("Revived " + profile.name()).formatted(
+                        Formatting.GREEN
+                    )
                 );
             } else {
                 source.sendMessage(
-                    Text.literal(profile.getName() + " is not banned.").formatted(Formatting.RED)
+                    Text.literal(profile.name() + " is not banned.").formatted(
+                        Formatting.RED
+                    )
                 );
             }
         }
