@@ -4,29 +4,21 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import java.lang.reflect.Field;
 import java.util.Collection;
-import java.util.stream.Collectors; // if not already imported
 import me.shedaniel.autoconfig.AutoConfig;
 import me.shedaniel.autoconfig.serializer.GsonConfigSerializer;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.minecraft.block.RespawnAnchorBlock;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.command.argument.GameProfileArgumentType;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.inventory.EnderChestInventory;
-import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.SimpleInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -200,7 +192,7 @@ public class LifestealMod implements ModInitializer {
                             .getUserBanList();
                         BannedPlayerEntry bannedPlayerEntry =
                             new BannedPlayerEntry(
-                                new PlayerConfigEntry(player.getGameProfile()), // ✅ Wrap in PlayerConfigEntry
+                                new PlayerConfigEntry(player.getGameProfile()),
                                 null,
                                 "Lifesteal Mod",
                                 null,
@@ -334,7 +326,6 @@ public class LifestealMod implements ModInitializer {
                             }
                         });
 
-                    // Filling the inventory with gray glass panes to fill the remaining slots
                     // Filling the inventory with gray glass panes to fill the remaining slots
                     for (int i = 0; i < inventory.size(); i++) {
                         if (inventory.getStack(i).isEmpty()) {
@@ -482,9 +473,6 @@ public class LifestealMod implements ModInitializer {
                                     if (playerMaxHealth >= amount * 2.0) {
                                         double newMaxHealth =
                                             playerMaxHealth - amount * 2.0;
-                                        // store current health
-                                        double playerCurrentHealth =
-                                            player.getHealth();
 
                                         // sets the current health too
                                         player
@@ -599,10 +587,6 @@ public class LifestealMod implements ModInitializer {
                                                 );
 
                                             for (ServerPlayerEntity target : targets) {
-                                                double currentMaxHealth =
-                                                    target.getAttributeBaseValue(
-                                                        EntityAttributes.MAX_HEALTH
-                                                    );
                                                 double newMaxHealth = Math.max(
                                                     2.0,
                                                     amount * 2.0

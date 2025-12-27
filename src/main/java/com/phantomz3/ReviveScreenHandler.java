@@ -2,12 +2,9 @@ package com.phantomz3;
 
 import com.mojang.authlib.GameProfile;
 import net.minecraft.component.DataComponentTypes;
-import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.SimpleInventory;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.screen.GenericContainerScreenHandler;
@@ -20,7 +17,6 @@ import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-import net.minecraft.world.GameMode;
 
 public class ReviveScreenHandler extends GenericContainerScreenHandler {
 
