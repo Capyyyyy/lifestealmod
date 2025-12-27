@@ -1,6 +1,7 @@
 package com.phantomz3;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.properties.PropertyMap;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import java.lang.reflect.Field;
 import java.util.Collection;
@@ -16,6 +17,7 @@ import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.command.argument.GameProfileArgumentType;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
+import net.minecraft.component.type.ProfileComponent;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerEntity;
@@ -23,6 +25,7 @@ import net.minecraft.inventory.SimpleInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtHelper;
 import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
 import net.minecraft.server.BannedPlayerEntry;
 import net.minecraft.server.BannedPlayerList;
@@ -34,6 +37,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Uuids;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.GameRules;
 import org.slf4j.Logger;
@@ -284,10 +288,10 @@ public class LifestealMod implements ModInitializer {
                     ServerPlayerEntity serverPlayer =
                         (ServerPlayerEntity) player;
 
-                    // Create a simple 9-slot chest inventory
+                    // Create a simple 27-slot chest inventory
                     SimpleInventory inventory = new SimpleInventory(27);
 
-                    // Fill the inventory with player heads of players who are banned with the specific reason
+                    // Fill the inventory with player heads of banned players
                     serverPlayer
                         .getEntityWorld()
                         .getServer()
@@ -303,26 +307,35 @@ public class LifestealMod implements ModInitializer {
                                 // Get the PlayerConfigEntry key directly
                                 PlayerConfigEntry config = entry.getKey();
 
-                                String name = config != null
-                                    ? config.name()
-                                    : "Unknown";
+                                if (config != null) {
+                                    ItemStack playerHead = new ItemStack(
+                                        Items.PLAYER_HEAD
+                                    );
 
-                                ItemStack playerHead = new ItemStack(
-                                    Items.PLAYER_HEAD
-                                );
-                                playerHead.set(
-                                    DataComponentTypes.ITEM_NAME,
-                                    Text.literal(name)
-                                );
+                                    // Set display name
+                                    playerHead.set(
+                                        DataComponentTypes.ITEM_NAME,
+                                        Text.literal(config.name())
+                                    );
 
-                                NbtCompound nbtCompound = new NbtCompound();
-                                nbtCompound.putString("SkullOwner", name);
-                                playerHead.set(
-                                    DataComponentTypes.CUSTOM_DATA,
-                                    NbtComponent.of(nbtCompound)
-                                );
+                                    // Use NBT for the skull owner
+                                    NbtCompound skullOwner = new NbtCompound();
+                                    skullOwner.putIntArray(
+                                        "Id",
+                                        Uuids.toIntArray(config.id())
+                                    ); // Convert UUID to int array
+                                    skullOwner.putString("Name", config.name());
 
-                                inventory.addStack(playerHead);
+                                    NbtCompound compound = new NbtCompound();
+                                    compound.put("SkullOwner", skullOwner);
+
+                                    playerHead.set(
+                                        DataComponentTypes.CUSTOM_DATA,
+                                        NbtComponent.of(compound)
+                                    );
+
+                                    inventory.addStack(playerHead);
+                                }
                             }
                         });
 
